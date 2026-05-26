@@ -55,6 +55,23 @@ function finishSheet(sheet: ExcelJS.Worksheet): void {
   });
 }
 
+function uniqueValues(values: string[]): string[] {
+  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+}
+
+function taskSkuJson(product: ProductRecord): string {
+  return JSON.stringify(
+    product.skuItems.map((sku) => ({
+      color: sku.color,
+      size: sku.size,
+      merchantCode: sku.merchantCode,
+      price: sku.finalStorePrice,
+      suggestedWeight: sku.suggestedWeight,
+      note: sku.note
+    }))
+  );
+}
+
 export async function exportBatchWorkbook(input: ExportBatchWorkbookInput): Promise<void> {
   await fs.mkdir(path.dirname(input.outputPath), { recursive: true });
 
@@ -113,6 +130,63 @@ export async function exportBatchWorkbook(input: ExportBatchWorkbookInput): Prom
   productsSheet.getColumn(14).width = 42;
   productsSheet.getColumn(16).width = 38;
   finishSheet(productsSheet);
+
+  const taskSheet = workbook.addWorksheet('上架任务表');
+  addHeader(taskSheet, [
+    '任务状态',
+    '款号',
+    '商品图片路径',
+    '尺码表图片路径',
+    '颜色',
+    '尺码',
+    'SKU数量',
+    'SKU明细JSON',
+    '供应商',
+    '品牌',
+    '大类（系统类目）',
+    '原始名称',
+    '最终店铺售价',
+    '面料名称',
+    '成分',
+    '处理提示',
+    '来源文件',
+    '人工备注',
+    '抖店商品链接'
+  ]);
+
+  for (const product of input.products) {
+    const colors = uniqueValues(product.skuItems.map((sku) => sku.color));
+    const sizes = uniqueValues(product.skuItems.map((sku) => sku.size));
+
+    taskSheet.addRow([
+      product.warnings.length ? '待人工确认' : '待创建',
+      product.styleNumber,
+      product.imagePath || '',
+      product.sizeChartImagePath || '',
+      (colors.length > 0 ? colors : product.colors).join('/'),
+      sizes.join('/'),
+      product.skuItems.length,
+      taskSkuJson(product),
+      product.supplier,
+      product.brand,
+      product.systemCategory,
+      product.originalName,
+      product.finalStorePrice,
+      product.fabricName,
+      product.composition,
+      product.warnings.join('；'),
+      product.sourceFile,
+      '',
+      ''
+    ]);
+  }
+  taskSheet.getColumn(3).width = 38;
+  taskSheet.getColumn(4).width = 38;
+  taskSheet.getColumn(8).width = 52;
+  taskSheet.getColumn(12).width = 34;
+  taskSheet.getColumn(15).width = 42;
+  taskSheet.getColumn(17).width = 38;
+  finishSheet(taskSheet);
 
   const skuSheet = workbook.addWorksheet('SKU明细');
   addHeader(skuSheet, ['款号', '颜色', '尺码', '商家编码', '最终店铺售价', '建议体重', 'SKU备注']);

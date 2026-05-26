@@ -40,4 +40,13 @@ describe('parseHandcardWorkbook', () => {
       })
     );
   });
+
+  runIfFixture('ignores size columns that have no actual measurement values', async () => {
+    const result = await parseHandcardWorkbook(fixture);
+    const item = result.products.find((product) => product.styleNumber === '24548');
+
+    expect(item).toBeTruthy();
+    expect(item?.sizeRows.map((row) => row.size)).not.toContain('5XL');
+    expect(item?.skuItems.map((sku) => sku.size)).not.toContain('5XL');
+  });
 });

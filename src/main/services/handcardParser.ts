@@ -187,7 +187,9 @@ function parseSizeRows(sheet: ExcelJS.Worksheet, startRow: number, nextStartRow:
     }
   }
 
-  return Array.from(rowsBySize.values());
+  return Array.from(rowsBySize.values()).filter(
+    (row) => Boolean(row.suggestedWeight) || Object.keys(row.measurements).length > 0
+  );
 }
 
 function applySuggestedWeights(skuItems: SkuItem[], sizeRows: SizeChartRow[]): void {
@@ -197,6 +199,13 @@ function applySuggestedWeights(skuItems: SkuItem[], sizeRows: SizeChartRow[]): v
     sku.suggestedWeight = suggestedWeightBySize.get(sku.size) || '';
     sku.note = sku.suggestedWeight ? `建议体重${sku.suggestedWeight}斤` : '';
   }
+}
+
+function filterSkuItemsBySizeRows(skuItems: SkuItem[], sizeRows: SizeChartRow[]): SkuItem[] {
+  if (sizeRows.length === 0) return skuItems;
+
+  const validSizes = new Set(sizeRows.map((row) => row.size));
+  return skuItems.filter((sku) => !sku.size || validSizes.has(sku.size));
 }
 
 function parseComposition(sheet: ExcelJS.Worksheet, startRow: number): string {
@@ -255,13 +264,15 @@ export async function parseHandcardWorkbook(filePath: string): Promise<HandcardP
     seenStyleNumbers.add(styleNumber);
 
     const finalStorePrice = toNumber(cellText(row, 13));
-    const skuItems = parseSkuItems(sheet, rowNumber, nextStartRow, styleNumber, finalStorePrice);
+    const rawSkuItems = parseSkuItems(sheet, rowNumber, nextStartRow, styleNumber, finalStorePrice);
     const sizeRows = parseSizeRows(sheet, rowNumber, nextStartRow, styleNumber);
+    const skuItems = filterSkuItemsBySizeRows(rawSkuItems, sizeRows);
     applySuggestedWeights(skuItems, sizeRows);
 
     const warnings: string[] = [];
     if (skuItems.length === 0) warnings.push('未解析到 SKU 明细');
     if (sizeRows.length === 0) warnings.push('未解析到尺码表');
+    if (skuItems.length < rawSkuItems.length) warnings.push('已跳过缺少尺码表数据的 SKU');
 
     products.push({
       styleNumber,

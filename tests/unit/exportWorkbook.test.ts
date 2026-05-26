@@ -24,6 +24,7 @@ describe('exportBatchWorkbook', () => {
       sourceSheet: '手卡资料',
       sourceRow: 3,
       imagePath: '/tmp/24324.png',
+      sizeChartImagePath: '/tmp/24324_尺码表.png',
       warnings: [],
       skuItems: [
         {
@@ -58,10 +59,15 @@ describe('exportBatchWorkbook', () => {
     await workbook.xlsx.readFile(outputPath);
 
     expect(workbook.getWorksheet('商品总表')).toBeTruthy();
+    expect(workbook.getWorksheet('上架任务表')).toBeTruthy();
     expect(workbook.getWorksheet('SKU明细')).toBeTruthy();
     expect(workbook.getWorksheet('尺码表')).toBeTruthy();
     expect(workbook.getWorksheet('异常记录')).toBeTruthy();
     expect(workbook.getWorksheet('商品总表')?.getCell('H2').value).toBe('白色/灰色');
+    expect(workbook.getWorksheet('上架任务表')?.getCell('A2').value).toBe('待创建');
+    expect(workbook.getWorksheet('上架任务表')?.getCell('B2').value).toBe('24324');
+    expect(workbook.getWorksheet('上架任务表')?.getCell('G2').value).toBe(1);
+    expect(String(workbook.getWorksheet('上架任务表')?.getCell('H2').value)).toContain('24324白色L');
     expect(workbook.getWorksheet('SKU明细')?.getCell('G2').value).toBe('建议体重100-120斤');
   });
 });

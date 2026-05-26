@@ -1,7 +1,7 @@
 {
   "name": "zhongkongtai",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "中控本地商品资料工作流工具",
   "author": "qty-git",
   "type": "module",
