@@ -2,11 +2,15 @@
   "name": "zhongkongtai",
   "private": true,
   "version": "0.1.0",
+  "description": "中控本地商品资料工作流工具",
+  "author": "qty-git",
   "type": "module",
   "main": "out/main/main.js",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
+    "dist:dir": "npm run build && electron-builder --dir",
+    "dist:win": "npm run build && electron-builder --win --x64",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.main.json",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest"
@@ -29,9 +33,50 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.3.4",
     "electron": "^33.4.11",
+    "electron-builder": "^26.8.1",
     "electron-vite": "^2.3.0",
     "typescript": "~5.8.2",
     "vite": "^5.4.21",
     "vitest": "^2.1.9"
+  },
+  "build": {
+    "appId": "com.qty.zhongkongtai",
+    "productName": "中控台",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "artifactName": "${productName}-Setup-${version}-${arch}.${ext}",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "中控台",
+      "perMachine": false
+    },
+    "portable": {
+      "artifactName": "${productName}-Portable-${version}-${arch}.${ext}"
+    }
   }
 }
