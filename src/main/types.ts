@@ -46,3 +46,18 @@ export interface BatchRow {
   reason: string;
   product?: ProductRecord;
 }
+
+export interface BatchProgress {
+  stage: 'idle' | 'scan' | 'parse' | 'image' | 'size-chart' | 'export' | 'done' | 'error';
+  message: string;
+  current: number;
+  total: number;
+  styleNumber?: string;
+}
+
+export interface BatchLogEntry {
+  time: string;
+  level: 'info' | 'warning' | 'error';
+  message: string;
+  styleNumber?: string;
+}
