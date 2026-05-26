@@ -31,8 +31,8 @@ npm run dist:win
 
 打包完成后，产物会出现在 `release/` 目录：
 
-- `中控台-Setup-0.1.0-x64.exe`：安装包，适合固定中控电脑使用。
-- `中控台-Portable-0.1.0-x64.exe`：便携包，适合拷贝到其他设备试用。
+- `中控台-Setup-0.1.1-x64.exe`：安装包，适合固定中控电脑使用。
+- `中控台-Portable-0.1.1-x64.exe`：便携包，适合拷贝到其他设备试用。
 
 如果不想在本地打包，可以进入 GitHub 仓库的 `Actions` 页面，手动运行 `Build Windows App`。运行完成后，在该次 workflow 的 `Artifacts` 中下载 `zhongkongtai-windows`。
 

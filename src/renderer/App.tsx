@@ -44,13 +44,14 @@ export function App() {
   const [workbookPaths, setWorkbookPaths] = useState<string[]>([]);
   const [outputDir, setOutputDir] = useState('');
   const [running, setRunning] = useState(false);
+  const [selecting, setSelecting] = useState<'workbooks' | 'output' | ''>('');
   const [rows, setRows] = useState<BatchRowView[]>([]);
   const [workbookPath, setWorkbookPath] = useState('');
   const [error, setError] = useState('');
 
   const canRun = useMemo(
-    () => Boolean(styleNumberText.trim() && workbookPaths.length > 0 && outputDir && !running),
-    [styleNumberText, workbookPaths.length, outputDir, running]
+    () => Boolean(styleNumberText.trim() && workbookPaths.length > 0 && outputDir && !running && !selecting),
+    [styleNumberText, workbookPaths.length, outputDir, running, selecting]
   );
 
   const stats = useMemo(
@@ -63,16 +64,42 @@ export function App() {
   );
 
   const selectWorkbooks = async () => {
-    const selected = await window.zhongkongtai.selectWorkbooks();
-    if (selected.length > 0) {
-      setWorkbookPaths(selected);
+    setError('');
+    setSelecting('workbooks');
+
+    try {
+      if (!window.zhongkongtai?.selectWorkbooks) {
+        throw new Error('本地文件选择接口未加载，请下载最新版本后重试');
+      }
+
+      const selected = await window.zhongkongtai.selectWorkbooks();
+      if (selected.length > 0) {
+        setWorkbookPaths(selected);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSelecting('');
     }
   };
 
   const selectOutputDir = async () => {
-    const selected = await window.zhongkongtai.selectOutputDir();
-    if (selected) {
-      setOutputDir(selected);
+    setError('');
+    setSelecting('output');
+
+    try {
+      if (!window.zhongkongtai?.selectOutputDir) {
+        throw new Error('本地文件选择接口未加载，请下载最新版本后重试');
+      }
+
+      const selected = await window.zhongkongtai.selectOutputDir();
+      if (selected) {
+        setOutputDir(selected);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSelecting('');
     }
   };
 
@@ -137,10 +164,11 @@ export function App() {
                 <button
                   type="button"
                   onClick={selectWorkbooks}
+                  disabled={Boolean(selecting)}
                   className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
                 >
-                  <FileSpreadsheet size={16} />
-                  选择
+                  {selecting === 'workbooks' ? <Loader2 className="animate-spin" size={16} /> : <FileSpreadsheet size={16} />}
+                  {selecting === 'workbooks' ? '打开中' : '选择'}
                 </button>
               </div>
               <div className="max-h-28 overflow-auto rounded-md bg-slate-50 p-3 text-xs leading-5 text-slate-600 ring-1 ring-slate-200">
@@ -156,10 +184,11 @@ export function App() {
                 <button
                   type="button"
                   onClick={selectOutputDir}
+                  disabled={Boolean(selecting)}
                   className="inline-flex items-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-medium text-slate-800 ring-1 ring-slate-300 transition hover:bg-slate-50"
                 >
-                  <FolderOpen size={16} />
-                  选择
+                  {selecting === 'output' ? <Loader2 className="animate-spin" size={16} /> : <FolderOpen size={16} />}
+                  {selecting === 'output' ? '打开中' : '选择'}
                 </button>
               </div>
               <div className="min-h-11 rounded-md bg-slate-50 p-3 text-xs leading-5 text-slate-600 ring-1 ring-slate-200">

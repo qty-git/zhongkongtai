@@ -1,4 +1,4 @@
-import { dialog, ipcMain, shell } from 'electron';
+import { BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import { processBatchWithoutAi } from './services/batchProcessor';
 import type { ProcessBatchWithoutAiInput } from './services/batchProcessor';
 
@@ -15,21 +15,25 @@ function isProcessInput(value: unknown): value is ProcessBatchWithoutAiInput {
 }
 
 export function registerIpcHandlers(): void {
-  ipcMain.handle('dialog:select-workbooks', async () => {
-    const result = await dialog.showOpenDialog({
+  ipcMain.handle('dialog:select-workbooks', async (event) => {
+    const parent = BrowserWindow.fromWebContents(event.sender);
+    const options: Electron.OpenDialogOptions = {
       title: '选择商品资料 Excel',
       properties: ['openFile', 'multiSelections'],
       filters: [{ name: 'Excel 工作簿', extensions: ['xlsx'] }]
-    });
+    };
+    const result = parent ? await dialog.showOpenDialog(parent, options) : await dialog.showOpenDialog(options);
 
     return result.canceled ? [] : result.filePaths;
   });
 
-  ipcMain.handle('dialog:select-output-dir', async () => {
-    const result = await dialog.showOpenDialog({
+  ipcMain.handle('dialog:select-output-dir', async (event) => {
+    const parent = BrowserWindow.fromWebContents(event.sender);
+    const options: Electron.OpenDialogOptions = {
       title: '选择输出目录',
       properties: ['openDirectory', 'createDirectory', 'promptToCreate']
-    });
+    };
+    const result = parent ? await dialog.showOpenDialog(parent, options) : await dialog.showOpenDialog(options);
 
     return result.canceled ? '' : result.filePaths[0] || '';
   });
