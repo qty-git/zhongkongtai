@@ -46,6 +46,8 @@ npm ci
 npm run dist:win
 ```
 
+`dist:win` 只负责生成本地安装包和便携包，不会自动发布 GitHub Release；GitHub Actions 会把 `release/*.exe` 上传为 artifact。
+
 ## 测试
 
 解析测试需要本地样例工作簿。把样例 Excel 复制到测试目录：
