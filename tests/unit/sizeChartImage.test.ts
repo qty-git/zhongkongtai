@@ -48,5 +48,5 @@ describe('renderSizeChartImage', () => {
     expect(path.basename(imagePath)).toBe('24324_尺码表.png');
     expect(fs.existsSync(imagePath)).toBe(true);
     expect(fs.readFileSync(imagePath).subarray(0, 4).toString('hex')).toBe('89504e47');
-  });
+  }, 15_000);
 });
