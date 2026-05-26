@@ -10,6 +10,7 @@ function isProcessInput(value: unknown): value is ProcessBatchWithoutAiInput {
     typeof input.styleNumberText === 'string' &&
     Array.isArray(input.workbookPaths) &&
     input.workbookPaths.every((item) => typeof item === 'string') &&
+    (input.workbookDirectory === undefined || typeof input.workbookDirectory === 'string') &&
     typeof input.outputDir === 'string'
   );
 }
@@ -27,6 +28,17 @@ export function registerIpcHandlers(): void {
     return result.canceled ? [] : result.filePaths;
   });
 
+  ipcMain.handle('dialog:select-workbook-directory', async (event) => {
+    const parent = BrowserWindow.fromWebContents(event.sender);
+    const options: Electron.OpenDialogOptions = {
+      title: '选择商品资料文件夹',
+      properties: ['openDirectory']
+    };
+    const result = parent ? await dialog.showOpenDialog(parent, options) : await dialog.showOpenDialog(options);
+
+    return result.canceled ? '' : result.filePaths[0] || '';
+  });
+
   ipcMain.handle('dialog:select-output-dir', async (event) => {
     const parent = BrowserWindow.fromWebContents(event.sender);
     const options: Electron.OpenDialogOptions = {
@@ -38,12 +50,18 @@ export function registerIpcHandlers(): void {
     return result.canceled ? '' : result.filePaths[0] || '';
   });
 
-  ipcMain.handle('batch:process-without-ai', async (_event, input: unknown) => {
+  ipcMain.handle('batch:process-without-ai', async (event, input: unknown) => {
     if (!isProcessInput(input)) {
       throw new Error('批次处理参数不完整');
     }
 
-    return processBatchWithoutAi(input);
+    return processBatchWithoutAi({
+      styleNumberText: input.styleNumberText,
+      workbookPaths: input.workbookPaths,
+      workbookDirectory: input.workbookDirectory,
+      outputDir: input.outputDir,
+      onProgress: (progress) => event.sender.send('batch:progress', progress)
+    });
   });
 
   ipcMain.handle('shell:show-item-in-folder', (_event, filePath: unknown) => {

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   AlertTriangle,
@@ -10,7 +10,7 @@ import {
   Play,
   XCircle
 } from 'lucide-react';
-import type { BatchRowView } from './types';
+import type { BatchProgressView, BatchRowView } from './types';
 
 const statusMeta: Record<BatchRowView['status'], { label: string; className: string; icon: LucideIcon }> = {
   pending: {
@@ -39,19 +39,40 @@ function displayPath(filePath: string): string {
   return filePath.split(/[\\/]/).pop() || filePath;
 }
 
+function progressPercent(progress: BatchProgressView | null): number {
+  if (!progress || progress.total <= 0) return 0;
+  return Math.max(0, Math.min(100, Math.round((progress.current / progress.total) * 100)));
+}
+
 export function App() {
   const [styleNumberText, setStyleNumberText] = useState('');
+  const [workbookDirectory, setWorkbookDirectory] = useState('');
   const [workbookPaths, setWorkbookPaths] = useState<string[]>([]);
+  const [scannedWorkbookPaths, setScannedWorkbookPaths] = useState<string[]>([]);
   const [outputDir, setOutputDir] = useState('');
   const [running, setRunning] = useState(false);
-  const [selecting, setSelecting] = useState<'workbooks' | 'output' | ''>('');
+  const [selecting, setSelecting] = useState<'directory' | 'workbooks' | 'output' | ''>('');
   const [rows, setRows] = useState<BatchRowView[]>([]);
   const [workbookPath, setWorkbookPath] = useState('');
+  const [logPath, setLogPath] = useState('');
+  const [progress, setProgress] = useState<BatchProgressView | null>(null);
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    if (!window.zhongkongtai?.onBatchProgress) return undefined;
+    return window.zhongkongtai.onBatchProgress((nextProgress) => setProgress(nextProgress));
+  }, []);
+
   const canRun = useMemo(
-    () => Boolean(styleNumberText.trim() && workbookPaths.length > 0 && outputDir && !running && !selecting),
-    [styleNumberText, workbookPaths.length, outputDir, running, selecting]
+    () =>
+      Boolean(
+        styleNumberText.trim() &&
+          (workbookDirectory || workbookPaths.length > 0) &&
+          outputDir &&
+          !running &&
+          !selecting
+      ),
+    [styleNumberText, workbookDirectory, workbookPaths.length, outputDir, running, selecting]
   );
 
   const stats = useMemo(
@@ -62,6 +83,29 @@ export function App() {
     }),
     [rows]
   );
+
+  const percent = progressPercent(progress);
+
+  const selectWorkbookDirectory = async () => {
+    setError('');
+    setSelecting('directory');
+
+    try {
+      if (!window.zhongkongtai?.selectWorkbookDirectory) {
+        throw new Error('资料文件夹选择接口未加载，请下载最新版本后重试');
+      }
+
+      const selected = await window.zhongkongtai.selectWorkbookDirectory();
+      if (selected) {
+        setWorkbookDirectory(selected);
+        setScannedWorkbookPaths([]);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSelecting('');
+    }
+  };
 
   const selectWorkbooks = async () => {
     setError('');
@@ -103,18 +147,37 @@ export function App() {
     }
   };
 
+  const showItemInFolder = (filePath: string) => {
+    window.zhongkongtai.showItemInFolder(filePath);
+  };
+
   const run = async () => {
     if (!canRun) return;
 
     setRunning(true);
     setRows([]);
     setWorkbookPath('');
+    setLogPath('');
+    setScannedWorkbookPaths([]);
+    setProgress({ stage: 'idle', message: '准备开始处理', current: 0, total: 1 });
     setError('');
 
     try {
-      const result = await window.zhongkongtai.processWithoutAi({ styleNumberText, workbookPaths, outputDir });
+      if (!window.zhongkongtai?.processWithoutAi) {
+        throw new Error('批处理接口未加载，请下载最新版本后重试');
+      }
+
+      const result = await window.zhongkongtai.processWithoutAi({
+        styleNumberText,
+        workbookPaths,
+        workbookDirectory,
+        outputDir
+      });
+
       setRows(result.rows.map(({ styleNumber, status, reason }) => ({ styleNumber, status, reason })));
       setWorkbookPath(result.workbookPath);
+      setLogPath(result.logPath);
+      setScannedWorkbookPaths(result.scannedWorkbookPaths);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -130,9 +193,12 @@ export function App() {
             <h1 className="text-2xl font-semibold">中控台</h1>
             <p className="mt-1 text-sm text-slate-500">本地商品资料处理</p>
           </div>
-          <div className="flex gap-2 text-sm">
+          <div className="flex flex-wrap gap-2 text-sm">
             <span className="rounded-md bg-white px-3 py-2 text-slate-600 ring-1 ring-slate-200">
-              Excel {workbookPaths.length}
+              手选 Excel {workbookPaths.length}
+            </span>
+            <span className="rounded-md bg-white px-3 py-2 text-slate-600 ring-1 ring-slate-200">
+              扫描 Excel {scannedWorkbookPaths.length}
             </span>
             <span className="rounded-md bg-white px-3 py-2 text-slate-600 ring-1 ring-slate-200">
               结果 {rows.length}
@@ -140,7 +206,7 @@ export function App() {
           </div>
         </header>
 
-        <section className="grid min-h-[420px] grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <section className="grid min-h-[420px] grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
           <div className="rounded-md border border-slate-200 bg-white p-4">
             <div className="mb-3 flex items-center justify-between">
               <label className="text-sm font-semibold" htmlFor="style-numbers">
@@ -159,19 +225,37 @@ export function App() {
 
           <aside className="flex flex-col gap-4">
             <div className="rounded-md border border-slate-200 bg-white p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-sm font-semibold">商品资料</h2>
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h2 className="text-sm font-semibold">资料文件夹</h2>
+                <button
+                  type="button"
+                  onClick={selectWorkbookDirectory}
+                  disabled={Boolean(selecting)}
+                  className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  {selecting === 'directory' ? <Loader2 className="animate-spin" size={16} /> : <FolderOpen size={16} />}
+                  {selecting === 'directory' ? '打开中' : '选择'}
+                </button>
+              </div>
+              <div className="min-h-11 rounded-md bg-slate-50 p-3 text-xs leading-5 text-slate-600 ring-1 ring-slate-200">
+                {workbookDirectory || '未选择'}
+              </div>
+            </div>
+
+            <div className="rounded-md border border-slate-200 bg-white p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h2 className="text-sm font-semibold">手动 Excel</h2>
                 <button
                   type="button"
                   onClick={selectWorkbooks}
                   disabled={Boolean(selecting)}
-                  className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
+                  className="inline-flex items-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-medium text-slate-800 ring-1 ring-slate-300 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                 >
                   {selecting === 'workbooks' ? <Loader2 className="animate-spin" size={16} /> : <FileSpreadsheet size={16} />}
                   {selecting === 'workbooks' ? '打开中' : '选择'}
                 </button>
               </div>
-              <div className="max-h-28 overflow-auto rounded-md bg-slate-50 p-3 text-xs leading-5 text-slate-600 ring-1 ring-slate-200">
+              <div className="max-h-24 overflow-auto rounded-md bg-slate-50 p-3 text-xs leading-5 text-slate-600 ring-1 ring-slate-200">
                 {workbookPaths.length > 0
                   ? workbookPaths.map((filePath) => <div key={filePath}>{displayPath(filePath)}</div>)
                   : '未选择'}
@@ -179,13 +263,13 @@ export function App() {
             </div>
 
             <div className="rounded-md border border-slate-200 bg-white p-4">
-              <div className="mb-3 flex items-center justify-between">
+              <div className="mb-3 flex items-center justify-between gap-3">
                 <h2 className="text-sm font-semibold">输出目录</h2>
                 <button
                   type="button"
                   onClick={selectOutputDir}
                   disabled={Boolean(selecting)}
-                  className="inline-flex items-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-medium text-slate-800 ring-1 ring-slate-300 transition hover:bg-slate-50"
+                  className="inline-flex items-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-medium text-slate-800 ring-1 ring-slate-300 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                 >
                   {selecting === 'output' ? <Loader2 className="animate-spin" size={16} /> : <FolderOpen size={16} />}
                   {selecting === 'output' ? '打开中' : '选择'}
@@ -208,24 +292,58 @@ export function App() {
           </aside>
         </section>
 
+        {progress && (
+          <section className="rounded-md border border-slate-200 bg-white px-4 py-3">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-sm">
+              <span className="font-medium text-slate-800">{progress.message}</span>
+              <span className="text-xs text-slate-500">
+                {progress.current}/{progress.total}
+              </span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+              <div className="h-full rounded-full bg-sky-600 transition-all" style={{ width: `${percent}%` }} />
+            </div>
+          </section>
+        )}
+
         {error && (
           <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
         )}
 
-        {workbookPath && (
-          <section className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-            <div className="min-w-0">
-              <span className="font-semibold">已导出：</span>
-              <span className="break-all">{workbookPath}</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => window.zhongkongtai.showItemInFolder(workbookPath)}
-              className="inline-flex shrink-0 items-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-medium text-emerald-800 ring-1 ring-emerald-200 transition hover:bg-emerald-100"
-            >
-              <ExternalLink size={16} />
-              打开位置
-            </button>
+        {(workbookPath || logPath) && (
+          <section className="grid grid-cols-1 gap-3 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 lg:grid-cols-2">
+            {workbookPath && (
+              <div className="flex min-w-0 items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="font-semibold">总表</div>
+                  <div className="break-all text-xs">{workbookPath}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => showItemInFolder(workbookPath)}
+                  className="inline-flex shrink-0 items-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-medium text-emerald-800 ring-1 ring-emerald-200 transition hover:bg-emerald-100"
+                >
+                  <ExternalLink size={16} />
+                  打开
+                </button>
+              </div>
+            )}
+            {logPath && (
+              <div className="flex min-w-0 items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="font-semibold">日志</div>
+                  <div className="break-all text-xs">{logPath}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => showItemInFolder(logPath)}
+                  className="inline-flex shrink-0 items-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-medium text-emerald-800 ring-1 ring-emerald-200 transition hover:bg-emerald-100"
+                >
+                  <ExternalLink size={16} />
+                  打开
+                </button>
+              </div>
+            )}
           </section>
         )}
 
