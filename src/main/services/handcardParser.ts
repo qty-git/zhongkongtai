@@ -7,7 +7,7 @@ export interface HandcardParseResult {
   duplicateStyleNumbers: string[];
 }
 
-const SHEET_NAME = '手卡资料';
+const PREFERRED_SHEET_NAMES = ['手卡资料', '测款资料'];
 const SIZE_PATTERN = /(10XL|9XL|8XL|7XL|6XL|5XL|4XL|3XL|2XL|XL|L|M|S|均码)$/;
 const SIZE_TEXT_PATTERN = /^(10XL|9XL|8XL|7XL|6XL|5XL|4XL|3XL|2XL|XL|L|M|S|均码)$/;
 
@@ -240,14 +240,31 @@ function findProductRows(sheet: ExcelJS.Worksheet): number[] {
   return productRows;
 }
 
+function findHandcardSheet(workbook: ExcelJS.Workbook): { sheet: ExcelJS.Worksheet; productRows: number[] } | null {
+  for (const sheetName of PREFERRED_SHEET_NAMES) {
+    const sheet = workbook.getWorksheet(sheetName);
+    if (!sheet) continue;
+
+    const productRows = findProductRows(sheet);
+    if (productRows.length > 0) return { sheet, productRows };
+  }
+
+  for (const sheet of workbook.worksheets) {
+    const productRows = findProductRows(sheet);
+    if (productRows.length > 0) return { sheet, productRows };
+  }
+
+  return null;
+}
+
 export async function parseHandcardWorkbook(filePath: string): Promise<HandcardParseResult> {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.readFile(filePath);
 
-  const sheet = workbook.getWorksheet(SHEET_NAME);
-  if (!sheet) return { products: [], duplicateStyleNumbers: [] };
+  const sheetInfo = findHandcardSheet(workbook);
+  if (!sheetInfo) return { products: [], duplicateStyleNumbers: [] };
 
-  const productRows = findProductRows(sheet);
+  const { sheet, productRows } = sheetInfo;
   const products: ProductRecord[] = [];
   const seenStyleNumbers = new Set<string>();
   const duplicateStyleNumbers = new Set<string>();
@@ -287,7 +304,7 @@ export async function parseHandcardWorkbook(filePath: string): Promise<HandcardP
       fabricName: cellText(sheet.getRow(rowNumber + 1), 16),
       composition: parseComposition(sheet, rowNumber),
       sourceFile: path.resolve(filePath),
-      sourceSheet: SHEET_NAME,
+      sourceSheet: sheet.name,
       sourceRow: rowNumber,
       skuItems,
       sizeRows,

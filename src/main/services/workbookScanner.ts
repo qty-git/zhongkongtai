@@ -3,6 +3,10 @@ import path from 'node:path';
 
 const WORKBOOK_EXTENSIONS = new Set(['.xlsx', '.xlsm']);
 
+function isTemporaryWorkbook(name: string): boolean {
+  return name.startsWith('~$') || name.startsWith('.~');
+}
+
 export async function scanWorkbookFiles(directoryPath: string): Promise<string[]> {
   const root = path.resolve(directoryPath);
   const results: string[] = [];
@@ -19,7 +23,7 @@ export async function scanWorkbookFiles(directoryPath: string): Promise<string[]
       }
 
       if (!entry.isFile()) continue;
-      if (entry.name.startsWith('~$')) continue;
+      if (isTemporaryWorkbook(entry.name)) continue;
       if (!WORKBOOK_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) continue;
 
       results.push(fullPath);

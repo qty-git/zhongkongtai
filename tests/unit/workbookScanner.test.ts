@@ -11,6 +11,8 @@ describe('scanWorkbookFiles', () => {
     fs.writeFileSync(path.join(root, 'a.xlsx'), '');
     fs.writeFileSync(path.join(root, 'b.xlsm'), '');
     fs.writeFileSync(path.join(root, '~$temp.xlsx'), '');
+    fs.writeFileSync(path.join(root, '.~temp.xlsx'), '');
+    fs.writeFileSync(path.join(root, '.~5月手卡资料5.22-5.31.xlsx'), '');
     fs.writeFileSync(path.join(root, 'ignore.xls'), '');
     fs.writeFileSync(path.join(root, 'nested', 'c.xlsx'), '');
 
