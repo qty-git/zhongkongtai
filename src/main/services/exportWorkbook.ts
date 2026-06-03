@@ -72,6 +72,42 @@ function taskSkuJson(product: ProductRecord): string {
   );
 }
 
+const AI_HEADERS = [
+  'AI识别状态',
+  'AI商品名',
+  'AI抖音主标题',
+  'AI副标题',
+  'AI属性JSON',
+  'AI识别错误'
+];
+
+function aiStatusLabel(product: ProductRecord): string {
+  if (!product.aiResult) return '未启用';
+  if (product.aiResult.status === 'success') return '成功';
+  if (product.aiResult.status === 'skipped') return '跳过';
+  if (product.aiResult.status === 'error') return '失败';
+  return '待处理';
+}
+
+function aiAttributesJson(product: ProductRecord): string {
+  return product.aiResult ? JSON.stringify(product.aiResult.attributes) : '';
+}
+
+function aiError(product: ProductRecord): string {
+  return product.aiResult?.error || '';
+}
+
+function aiFieldValues(product: ProductRecord): string[] {
+  return [
+    aiStatusLabel(product),
+    product.aiResult?.productName || '',
+    product.aiResult?.title || '',
+    product.aiResult?.subtitle || '',
+    aiAttributesJson(product),
+    aiError(product)
+  ];
+}
+
 export async function exportBatchWorkbook(input: ExportBatchWorkbookInput): Promise<void> {
   await fs.mkdir(path.dirname(input.outputPath), { recursive: true });
 
@@ -99,7 +135,8 @@ export async function exportBatchWorkbook(input: ExportBatchWorkbookInput): Prom
     '来源文件',
     '来源行',
     '人工备注',
-    '后续商品链接'
+    '后续商品链接',
+    ...AI_HEADERS
   ]);
 
   for (const product of input.products) {
@@ -122,7 +159,8 @@ export async function exportBatchWorkbook(input: ExportBatchWorkbookInput): Prom
       product.sourceFile,
       product.sourceRow,
       '',
-      ''
+      '',
+      ...aiFieldValues(product)
     ]);
   }
   productsSheet.getColumn(4).width = 38;
@@ -151,7 +189,8 @@ export async function exportBatchWorkbook(input: ExportBatchWorkbookInput): Prom
     '处理提示',
     '来源文件',
     '人工备注',
-    '抖店商品链接'
+    '抖店商品链接',
+    ...AI_HEADERS
   ]);
 
   for (const product of input.products) {
@@ -177,7 +216,8 @@ export async function exportBatchWorkbook(input: ExportBatchWorkbookInput): Prom
       product.warnings.join('；'),
       product.sourceFile,
       '',
-      ''
+      '',
+      ...aiFieldValues(product)
     ]);
   }
   taskSheet.getColumn(3).width = 38;

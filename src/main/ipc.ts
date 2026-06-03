@@ -1,6 +1,8 @@
 import { BrowserWindow, dialog, ipcMain, shell } from 'electron';
-import { processBatchWithoutAi } from './services/batchProcessor';
-import type { ProcessBatchWithoutAiInput } from './services/batchProcessor';
+import { testOpenRouterConnection } from './services/ai/openRouterClient';
+import { processBatch, processBatchWithoutAi } from './services/batchProcessor';
+import type { ProcessBatchInput, ProcessBatchWithoutAiInput } from './services/batchProcessor';
+import type { AiBatchConfig } from './types';
 
 function isProcessInput(value: unknown): value is ProcessBatchWithoutAiInput {
   if (!value || typeof value !== 'object') return false;
@@ -13,6 +15,24 @@ function isProcessInput(value: unknown): value is ProcessBatchWithoutAiInput {
     (input.workbookDirectory === undefined || typeof input.workbookDirectory === 'string') &&
     typeof input.outputDir === 'string'
   );
+}
+
+function isAiConfig(value: unknown): value is AiBatchConfig {
+  if (!value || typeof value !== 'object') return false;
+
+  const config = value as Partial<AiBatchConfig>;
+  return (
+    typeof config.enabled === 'boolean' &&
+    typeof config.apiKey === 'string' &&
+    typeof config.model === 'string'
+  );
+}
+
+function isProcessBatchInput(value: unknown): value is ProcessBatchInput {
+  if (!isProcessInput(value)) return false;
+
+  const input = value as Partial<ProcessBatchInput>;
+  return input.ai === undefined || isAiConfig(input.ai);
 }
 
 export function registerIpcHandlers(): void {
@@ -60,6 +80,36 @@ export function registerIpcHandlers(): void {
       workbookPaths: input.workbookPaths,
       workbookDirectory: input.workbookDirectory,
       outputDir: input.outputDir,
+      onProgress: (progress) => event.sender.send('batch:progress', progress)
+    });
+  });
+
+  ipcMain.handle('ai:test-connection', async (_event, input: unknown) => {
+    if (!isAiConfig(input) || !input.apiKey.trim() || !input.model.trim()) {
+      throw new Error('AI 配置不完整');
+    }
+
+    return testOpenRouterConnection({
+      apiKey: input.apiKey,
+      model: input.model
+    });
+  });
+
+  ipcMain.handle('batch:process', async (event, input: unknown) => {
+    if (!isProcessBatchInput(input)) {
+      throw new Error('批次处理参数不完整');
+    }
+
+    if (input.ai?.enabled && (!input.ai.apiKey.trim() || !input.ai.model.trim())) {
+      throw new Error('启用 AI 时必须填写 API Key 和模型 ID');
+    }
+
+    return processBatch({
+      styleNumberText: input.styleNumberText,
+      workbookPaths: input.workbookPaths,
+      workbookDirectory: input.workbookDirectory,
+      outputDir: input.outputDir,
+      ai: input.ai,
       onProgress: (progress) => event.sender.send('batch:progress', progress)
     });
   });

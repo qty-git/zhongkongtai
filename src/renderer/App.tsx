@@ -50,6 +50,11 @@ export function App() {
   const [workbookPaths, setWorkbookPaths] = useState<string[]>([]);
   const [scannedWorkbookPaths, setScannedWorkbookPaths] = useState<string[]>([]);
   const [outputDir, setOutputDir] = useState('');
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const [aiApiKey, setAiApiKey] = useState('');
+  const [aiModel, setAiModel] = useState('');
+  const [testingAi, setTestingAi] = useState(false);
+  const [aiTestStatus, setAiTestStatus] = useState('');
   const [running, setRunning] = useState(false);
   const [selecting, setSelecting] = useState<'directory' | 'workbooks' | 'output' | ''>('');
   const [rows, setRows] = useState<BatchRowView[]>([]);
@@ -63,16 +68,23 @@ export function App() {
     return window.zhongkongtai.onBatchProgress((nextProgress) => setProgress(nextProgress));
   }, []);
 
+  const aiReady = useMemo(() => !aiEnabled || Boolean(aiApiKey.trim() && aiModel.trim()), [
+    aiApiKey,
+    aiEnabled,
+    aiModel
+  ]);
+
   const canRun = useMemo(
     () =>
       Boolean(
         styleNumberText.trim() &&
           (workbookDirectory || workbookPaths.length > 0) &&
           outputDir &&
+          aiReady &&
           !running &&
           !selecting
       ),
-    [styleNumberText, workbookDirectory, workbookPaths.length, outputDir, running, selecting]
+    [styleNumberText, workbookDirectory, workbookPaths.length, outputDir, aiReady, running, selecting]
   );
 
   const stats = useMemo(
@@ -151,6 +163,29 @@ export function App() {
     window.zhongkongtai.showItemInFolder(filePath);
   };
 
+  const testAiConnection = async () => {
+    setError('');
+    setAiTestStatus('');
+    setTestingAi(true);
+
+    try {
+      if (!window.zhongkongtai?.testAiConnection) {
+        throw new Error('AI 测试接口未加载，请下载最新版本后重试');
+      }
+
+      const result = await window.zhongkongtai.testAiConnection({
+        enabled: true,
+        apiKey: aiApiKey,
+        model: aiModel
+      });
+      setAiTestStatus(result.ok ? '连接成功，模型支持图片输入' : result.error || '连接失败');
+    } catch (err) {
+      setAiTestStatus(err instanceof Error ? err.message : String(err));
+    } finally {
+      setTestingAi(false);
+    }
+  };
+
   const run = async () => {
     if (!canRun) return;
 
@@ -163,16 +198,28 @@ export function App() {
     setError('');
 
     try {
-      if (!window.zhongkongtai?.processWithoutAi) {
+      if (!window.zhongkongtai?.processBatch && !window.zhongkongtai?.processWithoutAi) {
         throw new Error('批处理接口未加载，请下载最新版本后重试');
       }
 
-      const result = await window.zhongkongtai.processWithoutAi({
-        styleNumberText,
-        workbookPaths,
-        workbookDirectory,
-        outputDir
-      });
+      const result = window.zhongkongtai.processBatch
+        ? await window.zhongkongtai.processBatch({
+            styleNumberText,
+            workbookPaths,
+            workbookDirectory,
+            outputDir,
+            ai: {
+              enabled: aiEnabled,
+              apiKey: aiApiKey,
+              model: aiModel
+            }
+          })
+        : await window.zhongkongtai.processWithoutAi({
+            styleNumberText,
+            workbookPaths,
+            workbookDirectory,
+            outputDir
+          });
 
       setRows(result.rows.map(({ styleNumber, status, reason }) => ({ styleNumber, status, reason })));
       setWorkbookPath(result.workbookPath);
@@ -277,6 +324,57 @@ export function App() {
               </div>
               <div className="min-h-11 rounded-md bg-slate-50 p-3 text-xs leading-5 text-slate-600 ring-1 ring-slate-200">
                 {outputDir || '未选择'}
+              </div>
+            </div>
+
+            <div className="rounded-md border border-slate-200 bg-white p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h2 className="text-sm font-semibold">AI 配置</h2>
+                <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={aiEnabled}
+                    onChange={(event) => setAiEnabled(event.target.checked)}
+                    disabled={running}
+                  />
+                  启用 AI 识别
+                </label>
+              </div>
+              <div className="space-y-2">
+                <input
+                  type="password"
+                  value={aiApiKey}
+                  onChange={(event) => {
+                    setAiApiKey(event.target.value);
+                    setAiTestStatus('');
+                  }}
+                  disabled={running}
+                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100 disabled:bg-slate-100 disabled:text-slate-400"
+                  placeholder="OpenRouter API Key"
+                />
+                <input
+                  type="text"
+                  value={aiModel}
+                  onChange={(event) => {
+                    setAiModel(event.target.value);
+                    setAiTestStatus('');
+                  }}
+                  disabled={running}
+                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100 disabled:bg-slate-100 disabled:text-slate-400"
+                  placeholder="OpenRouter 模型 ID"
+                />
+                <div className="flex items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={testAiConnection}
+                    disabled={testingAi || running || !aiApiKey.trim() || !aiModel.trim()}
+                    className="inline-flex items-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-medium text-slate-800 ring-1 ring-slate-300 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                  >
+                    {testingAi ? <Loader2 className="animate-spin" size={16} /> : <CheckCircle2 size={16} />}
+                    {testingAi ? '测试中' : '测试连接'}
+                  </button>
+                  {aiTestStatus && <span className="min-w-0 flex-1 text-right text-xs text-slate-500">{aiTestStatus}</span>}
+                </div>
               </div>
             </div>
 

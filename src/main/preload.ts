@@ -1,5 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { ProcessBatchWithoutAiInput, ProcessBatchWithoutAiResult } from './services/batchProcessor';
+import type { AiConnectionTestResult } from './services/ai/openRouterClient';
+import type {
+  ProcessBatchInput,
+  ProcessBatchResult,
+  ProcessBatchWithoutAiInput,
+  ProcessBatchWithoutAiResult
+} from './services/batchProcessor';
+import type { AiBatchConfig } from './types';
 import type { BatchProgress } from './types';
 
 contextBridge.exposeInMainWorld('zhongkongtai', {
@@ -8,6 +15,10 @@ contextBridge.exposeInMainWorld('zhongkongtai', {
   selectOutputDir: (): Promise<string> => ipcRenderer.invoke('dialog:select-output-dir'),
   processWithoutAi: (input: ProcessBatchWithoutAiInput): Promise<ProcessBatchWithoutAiResult> =>
     ipcRenderer.invoke('batch:process-without-ai', input),
+  processBatch: (input: ProcessBatchInput): Promise<ProcessBatchResult> =>
+    ipcRenderer.invoke('batch:process', input),
+  testAiConnection: (input: AiBatchConfig): Promise<AiConnectionTestResult> =>
+    ipcRenderer.invoke('ai:test-connection', input),
   onBatchProgress: (callback: (progress: BatchProgress) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, progress: BatchProgress) => callback(progress);
     ipcRenderer.on('batch:progress', listener);

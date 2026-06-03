@@ -1,4 +1,6 @@
 import path from 'node:path';
+import { callOpenRouterVision } from './ai/openRouterClient';
+import { recognizeProductWithAi } from './ai/productAiRecognizer';
 import { createBatchLog, writeBatchLog } from './batchLog';
 import { exportBatchWorkbook } from './exportWorkbook';
 import { parseHandcardWorkbook } from './handcardParser';
@@ -6,22 +8,27 @@ import { renderSizeChartImage } from './sizeChartImage';
 import { parseStyleNumbers } from './styleNumber';
 import { extractProductImages } from './workbookImages';
 import { scanWorkbookFiles } from './workbookScanner';
-import type { BatchProgress, BatchRow, ProductRecord } from '../types';
+import type { AiBatchConfig, BatchProgress, BatchRow, ProductAiResult, ProductRecord } from '../types';
 
-export interface ProcessBatchWithoutAiInput {
+export interface ProcessBatchInput {
   styleNumberText: string;
   workbookPaths: string[];
   workbookDirectory?: string;
   outputDir: string;
+  ai?: AiBatchConfig;
   onProgress?: (progress: BatchProgress) => void;
+  recognizeProduct?: (product: ProductRecord) => Promise<ProductAiResult>;
 }
 
-export interface ProcessBatchWithoutAiResult {
+export interface ProcessBatchResult {
   rows: BatchRow[];
   workbookPath: string;
   logPath: string;
   scannedWorkbookPaths: string[];
 }
+
+export type ProcessBatchWithoutAiInput = Omit<ProcessBatchInput, 'ai' | 'recognizeProduct'>;
+export type ProcessBatchWithoutAiResult = ProcessBatchResult;
 
 function exportFileName(): string {
   const timestamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
@@ -42,7 +49,7 @@ function uniquePaths(paths: string[]): string[] {
   return result;
 }
 
-function emitProgress(input: ProcessBatchWithoutAiInput, progress: BatchProgress): void {
+function emitProgress(input: ProcessBatchInput, progress: BatchProgress): void {
   input.onProgress?.(progress);
 }
 
@@ -50,9 +57,7 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export async function processBatchWithoutAi(
-  input: ProcessBatchWithoutAiInput
-): Promise<ProcessBatchWithoutAiResult> {
+export async function processBatch(input: ProcessBatchInput): Promise<ProcessBatchResult> {
   const log = createBatchLog();
   const requestedStyleNumbers = parseStyleNumbers(input.styleNumberText);
   const productByStyleNumber = new Map<string, ProductRecord>();
@@ -203,6 +208,59 @@ export async function processBatchWithoutAi(
     }
   }
 
+  const aiEnabled = Boolean(input.ai?.enabled);
+  if (aiEnabled) {
+    log.info(`AI 识别开始，共 ${products.length} 个商品`);
+
+    for (let index = 0; index < products.length; index += 1) {
+      const product = products[index];
+      emitProgress(input, {
+        stage: 'ai',
+        message: `正在 AI 识别：${product.styleNumber}`,
+        current: index + 1,
+        total: products.length,
+        styleNumber: product.styleNumber
+      });
+
+      try {
+        const recognize =
+          input.recognizeProduct ||
+          ((item: ProductRecord) =>
+            recognizeProductWithAi({
+              product: item,
+              apiKey: input.ai?.apiKey || '',
+              model: input.ai?.model || '',
+              callChatCompletion: callOpenRouterVision
+            }));
+
+        product.aiResult = await recognize(product);
+
+        if (product.aiResult.status === 'success') {
+          log.info('AI 识别完成', product.styleNumber);
+        } else if (product.aiResult.status === 'skipped') {
+          product.warnings.push(product.aiResult.error);
+          log.warning(product.aiResult.error, product.styleNumber);
+        } else {
+          product.warnings.push(`AI识别失败：${product.aiResult.error}`);
+          log.error(`AI识别失败：${product.aiResult.error}`, product.styleNumber);
+        }
+      } catch (error) {
+        const message = errorMessage(error);
+        product.aiResult = {
+          status: 'error',
+          productName: '',
+          title: '',
+          subtitle: '',
+          attributes: {},
+          error: message,
+          model: input.ai?.model || ''
+        };
+        product.warnings.push(`AI识别失败：${message}`);
+        log.error(`AI识别失败：${message}`, product.styleNumber);
+      }
+    }
+  }
+
   const rows: BatchRow[] = requestedStyleNumbers.map((styleNumber) => {
     const product = productByStyleNumber.get(styleNumber);
 
@@ -237,4 +295,10 @@ export async function processBatchWithoutAi(
   });
 
   return { rows, workbookPath, logPath, scannedWorkbookPaths };
+}
+
+export async function processBatchWithoutAi(
+  input: ProcessBatchWithoutAiInput
+): Promise<ProcessBatchWithoutAiResult> {
+  return processBatch({ ...input, ai: { enabled: false, apiKey: '', model: '' } });
 }

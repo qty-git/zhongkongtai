@@ -1,5 +1,23 @@
 export type RowStatus = 'pending' | 'success' | 'warning' | 'error';
 
+export type AiRecognitionStatus = 'pending' | 'success' | 'skipped' | 'error';
+
+export interface ProductAiResult {
+  status: AiRecognitionStatus;
+  productName: string;
+  title: string;
+  subtitle: string;
+  attributes: Record<string, string>;
+  error: string;
+  model: string;
+}
+
+export interface AiBatchConfig {
+  enabled: boolean;
+  apiKey: string;
+  model: string;
+}
+
 export interface ProductRecord {
   styleNumber: string;
   supplier: string;
@@ -17,6 +35,7 @@ export interface ProductRecord {
   sourceRow: number;
   imagePath?: string;
   sizeChartImagePath?: string;
+  aiResult?: ProductAiResult;
   skuItems: SkuItem[];
   sizeRows: SizeChartRow[];
   warnings: string[];
@@ -48,7 +67,7 @@ export interface BatchRow {
 }
 
 export interface BatchProgress {
-  stage: 'idle' | 'scan' | 'parse' | 'image' | 'size-chart' | 'export' | 'done' | 'error';
+  stage: 'idle' | 'scan' | 'parse' | 'image' | 'size-chart' | 'ai' | 'export' | 'done' | 'error';
   message: string;
   current: number;
   total: number;
